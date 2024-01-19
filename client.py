@@ -2,29 +2,29 @@ import socket
 import threading
 import base64
 import markdown2
-import emoji  # æ·»å emojiåº
+import emoji
 
-# åå»º socket å¯¹è±¡
+# 创建 socket 对象
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# ç»å® IP åç«¯å£
+# 绑定 IP 和端口
 server_socket.bind(('0.0.0.0', 5555))
 
-# çå¬è¿æ¥
+# 监听连接
 server_socket.listen()
 
-# å­å¨è¿æ¥çå®¢æ·ç«¯åå¯¹åºçå°å
+# 存储连接的客户端和对应的地址
 clients = {}
 addresses = {}
 
-# åéæ¶æ¯ç»æå®å®¢æ·ç«¯
+# 发送消息给指定客户端
 def send_to_client(message, client_socket):
     try:
         client_socket.send(message)
     except:
         pass
 
-# å¹¿æ­æ¶æ¯ç»ææå®¢æ·ç«¯
+# 广播消息给所有客户端
 def broadcast(message, client_socket=None):
     for client in clients:
         if client != client_socket:
@@ -33,14 +33,14 @@ def broadcast(message, client_socket=None):
             except:
                 remove_client(client)
 
-# ç§»é¤æ­å¼è¿æ¥çå®¢æ·ç«¯
+# 移除断开连接的客户端
 def remove_client(client_socket):
     addr = clients[client_socket]
     del clients[client_socket]
     del addresses[str(addr)]
     broadcast(f"Client {addr} has left the chat.")
 
-# å¤çå®¢æ·ç«¯çæ¶æ¯
+# 处理客户端的消息
 def handle_client(client_socket, addr):
     while True:
         try:
@@ -49,7 +49,7 @@ def handle_client(client_socket, addr):
                 break
             decoded_message = base64.b64decode(message).decode()
 
-            # å¤æ­æ¶æ¯ç±»åå¹¶å¤ç
+            # 判断消息类型并处理
             if decoded_message.startswith("/p2p "):
                 target_addr, message_content = decoded_message[len("/p2p "):].split(": ", 1)
                 if target_addr in addresses:
@@ -57,15 +57,19 @@ def handle_client(client_socket, addr):
                     send_to_client(message, target_socket)
                 else:
                     client_socket.send(f"Client {target_addr} not found.".encode())
+            elif decoded_message.startswith("/broadcast "):
+                broadcast_message_content = decoded_message[len("/broadcast "):]
+                broadcast_message = f"Broadcast from {addr}: {broadcast_message_content}"
+                broadcast(base64.b64encode(broadcast_message.encode()), client_socket)
             else:
-                broadcast_message = f"{addr}: {emoji.emojize(markdown2.markdown(message_content))}"  # ä½¿ç¨emojiåº
+                broadcast_message = f"{addr}: {emoji.emojize(markdown2.markdown(decoded_message))}"  # 使用emoji库
                 broadcast(base64.b64encode(broadcast_message.encode()), client_socket)
 
         except:
             remove_client(client_socket)
             break
 
-# æ¥åå®¢æ·ç«¯è¿æ¥
+# 接受客户端连接
 while True:
     client_socket, addr = server_socket.accept()
     clients[client_socket] = addr
@@ -73,6 +77,6 @@ while True:
     broadcast(f"Client {addr} has joined the chat.")
     print(f"Connection from {addr}")
 
-    # å¯å¨ä¸ä¸ªæ°çº¿ç¨æ¥å¤çå®¢æ·ç«¯
+    # 启动一个新线程来处理客户端
     client_thread = threading.Thread(target=handle_client, args=(client_socket, addr))
     client_thread.start()
